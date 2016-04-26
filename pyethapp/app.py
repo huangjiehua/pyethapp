@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-from ethereum import blocks
+import blocks
 from logging import StreamHandler
 from IPython.core import ultratb
 import json
@@ -20,7 +20,7 @@ from devp2p.app import BaseApp
 import eth_protocol
 from eth_service import ChainService
 from console_service import Console
-from ethereum.blocks import Block
+from blocks import Block
 import ethereum.slogging as slogging
 import config as konfig
 from db_service import DBService

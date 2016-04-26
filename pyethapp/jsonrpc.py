@@ -8,13 +8,13 @@ from copy import deepcopy
 from decorator import decorator
 from collections import Iterable
 import inspect
-import ethereum.blocks
+import blocks
 from ethereum.utils import (is_numeric, is_string, int_to_big_endian, big_endian_to_int,
                             encode_hex, decode_hex, sha3, zpad)
 import ethereum.slogging as slogging
 from ethereum.slogging import LogRecorder
-from ethereum.transactions import Transaction
-from ethereum import processblock
+from transactions import Transaction
+import processblock
 import gevent
 import gevent.wsgi
 import gevent.queue
@@ -39,8 +39,6 @@ from ethereum.utils import int32
 logger = log = slogging.get_logger('jsonrpc')
 
 # defaults
-default_startgas = 500 * 1000
-default_gasprice = 60 * denoms.shannon
 
 
 def _fail_on_error_dispatch(self, request):
@@ -456,21 +454,15 @@ def block_encoder(block, include_transactions=False, pending=False, is_header=Fa
         'hash': data_encoder(block.hash) if not pending else None,
         'parentHash': data_encoder(block.prevhash),
         'nonce': data_encoder(block.nonce) if not pending else None,
-        'sha3Uncles': data_encoder(block.uncles_hash),
         'logsBloom': data_encoder(int_to_big_endian(block.bloom), 256) if not pending else None,
         'transactionsRoot': data_encoder(block.tx_list_root),
         'stateRoot': data_encoder(block.state_root),
         'miner': data_encoder(block.coinbase) if not pending else None,
-        'difficulty': quantity_encoder(block.difficulty),
         'extraData': data_encoder(block.extra_data),
-        'gasLimit': quantity_encoder(block.gas_limit),
-        'gasUsed': quantity_encoder(block.gas_used),
         'timestamp': quantity_encoder(block.timestamp),
     }
     if not is_header:
-        d['totalDifficulty'] = quantity_encoder(block.chain_difficulty())
         d['size'] = quantity_encoder(len(rlp.encode(block)))
-        d['uncles'] = [data_encoder(u.hash) for u in block.uncles]
         if include_transactions:
             d['transactions'] = []
             for i, tx in enumerate(block.get_transactions()):
@@ -495,8 +487,6 @@ def tx_encoder(transaction, block, i, pending):
         'from': data_encoder(transaction.sender),
         'to': data_encoder(transaction.to),
         'value': quantity_encoder(transaction.value),
-        'gasPrice': quantity_encoder(transaction.gasprice),
-        'gas': quantity_encoder(transaction.startgas),
         'input': data_encoder(transaction.data),
     }
 
@@ -757,11 +747,6 @@ class Miner(Subdispatcher):
         return cb
 
     @public
-    @encode_res(quantity_encoder)
-    def gasPrice(self):
-        return 1  # FIXME (check latest txs)
-
-    @public
     def accounts(self):
         return [address_encoder(account.address) for account in self.app.services.accounts]
 
@@ -876,26 +861,6 @@ class Chain(Subdispatcher):
             return quantity_encoder(block.transaction_count)
 
     @public
-    @decode_arg('block_hash', block_hash_decoder)
-    def getUncleCountByBlockHash(self, block_hash):
-        try:
-            block = self.json_rpc_server.get_block(block_hash)
-        except KeyError:
-            return None
-        else:
-            return quantity_encoder(len(block.uncles))
-
-    @public
-    @decode_arg('block_id', block_id_decoder)
-    def getUncleCountByBlockNumber(self, block_id):
-        try:
-            block = self.json_rpc_server.get_block(block_id)
-        except KeyError:
-            return None
-        else:
-            return quantity_encoder(len(block.uncles))
-
-    @public
     @decode_arg('address', address_decoder)
     @decode_arg('block_id', block_id_decoder)
     @encode_res(data_encoder)
@@ -954,28 +919,7 @@ class Chain(Subdispatcher):
             return None
         return tx_encoder(tx, block, index, block_id == 'pending')
 
-    @public
-    @decode_arg('block_hash', block_hash_decoder)
-    @decode_arg('index', quantity_decoder)
-    def getUncleByBlockHashAndIndex(self, block_hash, index):
-        try:
-            block = self.json_rpc_server.get_block(block_hash)
-            uncle = block.uncles[index]
-        except (IndexError, KeyError):
-            return None
-        return block_encoder(uncle, is_header=True)
-
-    @public
-    @decode_arg('block_id', block_id_decoder)
-    @decode_arg('index', quantity_decoder)
-    def getUncleByBlockNumberAndIndex(self, block_id, index):
-        try:
-            block = self.json_rpc_server.get_block(block_id)
-            uncle = block.uncles[index]
-        except (IndexError, KeyError):
-            return None
-        return block_encoder(uncle, is_header=True)
-
+   
     @public
     def getWork(self):
         print 'Sending work...'
@@ -990,19 +934,6 @@ class Chain(Subdispatcher):
     def test(self, nonce):
         print 80808080808
         return nonce
-
-    @public
-    @encode_res(quantity_encoder)
-    def gasLimit(self):
-        return self.json_rpc_server.get_block('latest').gas_limit
-
-    @public
-    @encode_res(quantity_encoder)
-    def lastGasPrice(self):
-        txs = self.json_rpc_server.get_block('latest').get_transactions()
-        if txs:
-            return min(tx.gasprice for tx in txs)
-        return 0
 
     @public
     @decode_arg('nonce', data_decoder)
@@ -1048,10 +979,6 @@ class Chain(Subdispatcher):
             return default
 
         to = get_data_default('to', address_decoder, b'')
-        gas_key = 'gas' if 'gas' in data else 'startgas'
-        startgas = get_data_default(gas_key, quantity_decoder, default_startgas)
-        gasprice_key = 'gasPrice' if 'gasPrice' in data else 'gasprice'
-        gasprice = get_data_default(gasprice_key, quantity_decoder, default_gasprice)
         value = get_data_default('value', quantity_decoder, 0)
         data_ = get_data_default('data', data_decoder, b'')
         v = signed = get_data_default('v', quantity_decoder, 0)
@@ -1069,7 +996,7 @@ class Chain(Subdispatcher):
             if nonce is None or nonce == 0:
                 nonce = self.app.services.chain.chain.head_candidate.get_nonce(sender)
 
-        tx = Transaction(nonce, gasprice, startgas, to, value, data_, v, r, s)
+        tx = Transaction(nonce, to, value, data_, v, r, s)
         tx._sender = None
         if not signed:
             assert sender in self.app.services.accounts, 'no account for sender'
@@ -1095,25 +1022,17 @@ class Chain(Subdispatcher):
                 success, output = processblock.apply_transaction(test_block, tx)
                 assert success
         else:
-            test_block = ethereum.blocks.genesis(block.db)
+            test_block = blocks.genesis(block.db)
             original = {key: value for key, value in snapshot_before.items() if key != 'txs'}
             original = deepcopy(original)
             original['txs'] = Trie(snapshot_before['txs'].db, snapshot_before['txs'].root_hash)
-            test_block = ethereum.blocks.genesis(block.db)
+            test_block = blocks.genesis(block.db)
             test_block.revert(original)
 
         # validate transaction
         if not isinstance(data, dict):
             raise BadRequestError('Transaction must be an object')
         to = address_decoder(data['to'])
-        try:
-            startgas = quantity_decoder(data['gas'])
-        except KeyError:
-            startgas = test_block.gas_limit - test_block.gas_used
-        try:
-            gasprice = quantity_decoder(data['gasPrice'])
-        except KeyError:
-            gasprice = 0
         try:
             value = quantity_decoder(data['value'])
         except KeyError:
@@ -1129,7 +1048,7 @@ class Chain(Subdispatcher):
 
         # apply transaction
         nonce = test_block.get_nonce(sender)
-        tx = Transaction(nonce, gasprice, startgas, to, value, data_)
+        tx = Transaction(nonce, to, value, data_)
         tx.sender = sender
 
         try:
@@ -1145,72 +1064,6 @@ class Chain(Subdispatcher):
             return output
         else:
             return False
-
-    @public
-    @decode_arg('block_id', block_id_decoder)
-    @encode_res(quantity_encoder)
-    def estimateGas(self, data, block_id='pending'):
-        block = self.json_rpc_server.get_block(block_id)
-        snapshot_before = block.snapshot()
-        tx_root_before = snapshot_before['txs'].root_hash  # trie object in snapshot is mutable
-
-        # rebuild block state before finalization
-        if block.has_parent():
-            parent = block.get_parent()
-            test_block = block.init_from_parent(parent, block.coinbase,
-                                                timestamp=block.timestamp)
-            for tx in block.get_transactions():
-                success, output = processblock.apply_transaction(test_block, tx)
-                assert success
-        else:
-            test_block = ethereum.blocks.genesis(block.db)
-            original = {key: value for key, value in snapshot_before.items() if key != 'txs'}
-            original = deepcopy(original)
-            original['txs'] = Trie(snapshot_before['txs'].db, snapshot_before['txs'].root_hash)
-            test_block = ethereum.blocks.genesis(block.db)
-            test_block.revert(original)
-
-        # validate transaction
-        if not isinstance(data, dict):
-            raise BadRequestError('Transaction must be an object')
-        to = address_decoder(data['to'])
-        try:
-            startgas = quantity_decoder(data['gas'])
-        except KeyError:
-            startgas = block.gas_limit - block.gas_used
-        try:
-            gasprice = quantity_decoder(data['gasPrice'])
-        except KeyError:
-            gasprice = 0
-        try:
-            value = quantity_decoder(data['value'])
-        except KeyError:
-            value = 0
-        try:
-            data_ = data_decoder(data['data'])
-        except KeyError:
-            data_ = b''
-        try:
-            sender = address_decoder(data['from'])
-        except KeyError:
-            sender = '\x00' * 20
-
-        # apply transaction
-        nonce = test_block.get_nonce(sender)
-        tx = Transaction(nonce, gasprice, startgas, to, value, data_)
-        tx.sender = sender
-
-        try:
-            success, output = processblock.apply_transaction(test_block, tx)
-        except processblock.InvalidTransaction:
-            success = False
-        # make sure we didn't change the real state
-        snapshot_after = block.snapshot()
-        assert snapshot_after == snapshot_before
-        assert snapshot_after['txs'].root_hash == tx_root_before
-
-        return test_block.gas_used - block.gas_used
-
 
 class LogFilter(object):
 
@@ -1511,11 +1364,10 @@ class FilterManager(Subdispatcher):
     def _get_block_before_tx(self, txhash):
         tx, blk, i = self.app.services.chain.chain.index.get_transaction(txhash)
         # get the state we had before this transaction
-        test_blk = ethereum.blocks.Block.init_from_parent(blk.get_parent(),
+        test_blk = blocks.Block.init_from_parent(blk.get_parent(),
                                                           blk.coinbase,
                                                           extra_data=blk.extra_data,
-                                                          timestamp=blk.timestamp,
-                                                          uncles=blk.uncles)
+                                                          timestamp=blk.timestamp)
         pre_state = test_blk.state_root
         for i in range(blk.transaction_count):
             tx_lst_serialized, sr, _ = blk.get_transaction(i)
@@ -1576,16 +1428,9 @@ class FilterManager(Subdispatcher):
             'transactionIndex': quantity_encoder(index),
             'blockHash': data_encoder(block.hash),
             'blockNumber': quantity_encoder(block.number),
-            'cumulativeGasUsed': quantity_encoder(receipt.gas_used),
             'contractAddress': data_encoder(tx.creates) if tx.creates else None
         }
-        if index == 0:
-            response['gasUsed'] = quantity_encoder(receipt.gas_used)
-        else:
-            prev_receipt = block.get_receipt(index - 1)
-            assert prev_receipt.gas_used < receipt.gas_used
-            response['gasUsed'] = quantity_encoder(receipt.gas_used - prev_receipt.gas_used)
-
+       
         logs = []
         for i, log in enumerate(receipt.logs):
             logs.append({

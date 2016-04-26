@@ -1,19 +1,22 @@
 import time
-from ethereum.config import Env
+import config as ethereum_config
+from config import Env
 from ethereum.utils import sha3
 import rlp
 from rlp.utils import encode_hex
-from ethereum import processblock
-from ethereum import config as ethereum_config
+import processblock
 from synchronizer import Synchronizer
 from ethereum.slogging import get_logger
-from ethereum.processblock import validate_transaction
+from processblock import validate_transaction
 from ethereum.exceptions import InvalidTransaction, InvalidNonce, \
     InsufficientBalance, InsufficientStartGas
-from ethereum.chain import Chain
+import chain
+from chain import Chain
 from ethereum.refcount_db import RefcountDB
-from ethereum.blocks import Block, VerificationFailed
-from ethereum.transactions import Transaction
+import blocks
+from blocks import Block, VerificationFailed
+import transactions
+from transactions import Transaction
 from devp2p.service import WiredService
 from devp2p.protocol import BaseProtocol
 import eth_protocol
@@ -103,7 +106,7 @@ class ChainService(WiredService):
     config = None
     block_queue_size = 1024
     transaction_queue_size = 1024
-    processed_gas = 0
+#    processed_gas = 0
     processed_elapsed = 0
 
     def __init__(self, app):
@@ -168,11 +171,11 @@ class ChainService(WiredService):
     def is_syncing(self):
         return self.synchronizer.synctask is not None
 
-    @property
-    def is_mining(self):
-        if 'pow' in self.app.services:
-            return self.app.services.pow.active
-        return False
+#    @property
+#    def is_mining(self):
+#        if 'pow' in self.app.services:
+#            return self.app.services.pow.active
+#        return False
 
     def _on_new_head(self, block):
         log.debug('new head cbs', num=len(self.on_new_head_cbs))
@@ -210,8 +213,8 @@ class ChainService(WiredService):
             return
 
         if origin is not None:  # not locally added via jsonrpc
-            if not self.is_mining or self.is_syncing:
-                log.debug('discarding tx', syncing=self.is_syncing, mining=self.is_mining)
+            if self.is_syncing:
+                log.debug('discarding tx', syncing=self.is_syncing)
                 return
 
         self.add_transaction_lock.acquire()
@@ -273,14 +276,12 @@ class ChainService(WiredService):
                     st = time.time()
                     block = t_block.to_block(env=self.chain.env)
                     elapsed = time.time() - st
-                    log.debug('deserialized', elapsed='%.4fs' % elapsed, ts=time.time(),
-                              gas_used=block.gas_used, gpsec=self.gpsec(block.gas_used, elapsed))
+                    log.debug('deserialized', elapsed='%.4fs' % elapsed, ts=time.time())
                 except processblock.InvalidTransaction as e:
                     log.warn('invalid transaction', block=t_block, error=e, FIXME='ban node')
                     errtype = \
                         'InvalidNonce' if isinstance(e, InvalidNonce) else \
                         'NotEnoughCash' if isinstance(e, InsufficientBalance) else \
-                        'OutOfGasBase' if isinstance(e, InsufficientStartGas) else \
                         'other_transaction_error'
                     sentry.warn_invalid(t_block, errtype)
                     self.block_queue.get()
@@ -302,8 +303,7 @@ class ChainService(WiredService):
                 log.debug('adding', block=block, ts=time.time())
                 if self.chain.add_block(block, forward_pending_transactions=self.is_mining):
                     now = time.time()
-                    log.info('added', block=block, txs=block.transaction_count,
-                             gas_used=block.gas_used)
+                    log.info('added', block=block, txs=block.transaction_count)
                     if t_block.newblock_timestamp:
                         total = now - t_block.newblock_timestamp
                         self.newblock_processing_times.append(total)
@@ -322,21 +322,12 @@ class ChainService(WiredService):
             self.add_blocks_lock = False
             self.add_transaction_lock.release()
 
-    def gpsec(self, gas_spent=0, elapsed=0):
-        if gas_spent:
-            self.processed_gas += gas_spent
-            self.processed_elapsed += elapsed
-        return int(self.processed_gas / (0.001 + self.processed_elapsed))
-
-    def broadcast_newblock(self, block, chain_difficulty=None, origin=None):
-        if not chain_difficulty:
-            assert block.hash in self.chain
-            chain_difficulty = block.chain_difficulty()
+    def broadcast_newblock(self, block, origin=None):
         assert isinstance(block, (eth_protocol.TransientBlock, Block))
         if self.broadcast_filter.update(block.header.hash):
             log.debug('broadcasting newblock', origin=origin)
             bcast = self.app.services.peermanager.broadcast
-            bcast(eth_protocol.ETHProtocol, 'newblock', args=(block, chain_difficulty),
+            bcast(eth_protocol.ETHProtocol, 'newblock', args=(block),
                   exclude_peers=[origin.peer] if origin else [])
         else:
             log.debug('already broadcasted block')
@@ -398,18 +389,18 @@ class ChainService(WiredService):
         self.synchronizer.receive_status(proto, chain_head_hash, chain_difficulty)
 
         # send transactions
-        transactions = self.chain.get_transactions()
-        if transactions:
+        transaction = self.chain.get_transactions()
+        if transaction:
             log.debug("sending transactions", remote_id=proto)
-            proto.send_transactions(*transactions)
+            proto.send_transactions(*transaction)
 
     # transactions
 
-    def on_receive_transactions(self, proto, transactions):
+    def on_receive_transactions(self, proto, transaction):
         "receives rlp.decoded serialized"
         log.debug('----------------------------------')
-        log.debug('remote_transactions_received', count=len(transactions), remote_id=proto)
-        for tx in transactions:
+        log.debug('remote_transactions_received', count=len(transaction), remote_id=proto)
+        for tx in transaction:
             self.add_transaction(tx, origin=proto)
 
     # blockhashes ###########

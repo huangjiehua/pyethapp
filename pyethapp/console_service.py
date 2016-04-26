@@ -5,7 +5,7 @@ from logging import StreamHandler, Formatter
 import os
 import signal
 import errno
-from ethereum import processblock
+import processblock
 import select
 import time
 import sys
@@ -18,7 +18,8 @@ import IPython
 import IPython.core.shellapp
 from IPython.lib.inputhook import inputhook_manager, stdin_ready
 from ethereum.slogging import getLogger
-from ethereum.transactions import Transaction
+import transactions 
+from transactions import Transaction
 from ethereum.utils import denoms, normalize_address as _normalize_address, bcolors as bc
 
 from rpc_client import ABIContract
@@ -197,19 +198,17 @@ class Console(BaseService):
                 return this.chain.head
 
 
-            def transact(this, to, value=0, data='', sender=None,
-                         startgas=25000, gasprice=60 * denoms.shannon):
+            def transact(this, to, value=0, data='', sender=None):
                 sender = normalize_address(sender or this.coinbase)
                 to = normalize_address(to, allow_blank=True)
                 nonce = this.pending.get_nonce(sender)
-                tx = Transaction(nonce, gasprice, startgas, to, value, data)
+                tx = Transaction(nonce, to, value, data)
                 this.app.services.accounts.sign_tx(sender, tx)
                 assert tx.sender == sender
                 this.chainservice.add_transaction(tx)
                 return tx
 
-            def call(this, to, value=0, data='',  sender=None,
-                     startgas=25000, gasprice=60 * denoms.shannon):
+            def call(this, to, value=0, data='',  sender=None):
                 sender = normalize_address(sender or this.coinbase)
                 to = normalize_address(to, allow_blank=True)
                 block = this.head_candidate
@@ -225,7 +224,7 @@ class Console(BaseService):
 
                 # apply transaction
                 nonce = test_block.get_nonce(sender)
-                tx = Transaction(nonce, gasprice, startgas, to, value, data)
+                tx = Transaction(nonce, to, value, data)
                 tx.sender = sender
                 try:
                     success, output = processblock.apply_transaction(test_block, tx)
