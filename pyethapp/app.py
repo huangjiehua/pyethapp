@@ -88,7 +88,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
     data_dir = alt_data_dir or konfig.default_data_dir
     konfig.setup_data_dir(data_dir)  # if not available, sets up data_dir and required config
     log.info('using data in', path=data_dir)
-
     # prepare configuration
     # config files only contain required config (privkeys) and config different from the default
     if alt_config:  # specified config file
@@ -108,7 +107,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
 
     # Set config values based on profile selection
     merge_dict(config, PROFILES[profile])
-
     if genesis_from_config_file:
         # Fixed genesis_hash taken from profile must be deleted as custom genesis loaded
         del config['eth']['genesis_hash']
@@ -148,7 +146,7 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
 @click.option('--nodial/--dial',  default=False, help='Do not dial nodes.')
 @click.option('--console',  is_flag=True, help='Immediately drop into interactive console.')
 @click.pass_context
-def run(ctx, dev, nodial, fake, console):
+def run(ctx, dev, nodial, console):
     """Start the client ( --dev to stop on error)"""
     config = ctx.obj['config']
     if nodial:
@@ -161,7 +159,6 @@ def run(ctx, dev, nodial, fake, console):
 
     # create app
     app = EthApp(config)
-
     # development mode
     if dev:
         gevent.get_hub().SYSTEM_ERROR = BaseException
