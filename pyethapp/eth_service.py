@@ -238,7 +238,7 @@ class ChainService(WiredService):
         if self.chain.add_block(block):
             log.debug('added', block=block, ts=time.time())
             assert block == self.chain.head
-            self.broadcast_newblock(block, chain_difficulty=block.chain_difficulty())
+            self.broadcast_newblock(block)
 
     def knows_block(self, block_hash):
         "if block is in chain or in queue"
@@ -362,15 +362,14 @@ class ChainService(WiredService):
 
         # send status
         head = self.chain.head
-        proto.send_status(chain_difficulty=head.chain_difficulty(), chain_head_hash=head.hash,
-                          genesis_hash=self.chain.genesis.hash)
+        proto.send_status(chain_head_hash=head.hash, genesis_hash=self.chain.genesis.hash)
 
     def on_wire_protocol_stop(self, proto):
         assert isinstance(proto, self.wire_protocol)
         log.debug('----------------------------------')
         log.debug('on_wire_protocol_stop', proto=proto)
 
-    def on_receive_status(self, proto, eth_version, network_id, chain_difficulty, chain_head_hash,
+    def on_receive_status(self, proto, eth_version, network_id, chain_head_hash,
                           genesis_hash):
         log.debug('----------------------------------')
         log.debug('status received', proto=proto, eth_version=eth_version)
@@ -386,7 +385,7 @@ class ChainService(WiredService):
             raise eth_protocol.ETHProtocolError('wrong genesis block')
 
         # request chain
-        self.synchronizer.receive_status(proto, chain_head_hash, chain_difficulty)
+        self.synchronizer.receive_status(proto, chain_head_hash)
 
         # send transactions
         transaction = self.chain.get_transactions()
@@ -474,10 +473,10 @@ class ChainService(WiredService):
         if transient_blocks:
             self.synchronizer.receive_blocks(proto, transient_blocks)
 
-    def on_receive_newblock(self, proto, block, chain_difficulty):
+    def on_receive_newblock(self, proto, block):
         log.debug('----------------------------------')
         log.debug("recv newblock", block=block, remote_id=proto)
-        self.synchronizer.receive_newblock(proto, block, chain_difficulty)
+        self.synchronizer.receive_newblock(proto, block)
 
     def on_receive_getblockhashesfromnumber(self, proto, number, count):
         log.debug('----------------------------------')

@@ -671,21 +671,15 @@ class Compilers(Subdispatcher):
 
     def __init__(self):
         super(Compilers, self).__init__()
-        self.compilers_ = None
+        self.compilers_ = None 
 
     @property
     def compilers(self):
         if self.compilers_ is None:
-            self.compilers_ = {}
+            self.compilers_= {}
             try:
-                import serpent
-                self.compilers_['serpent'] = serpent.compile
-                self.compilers_['lll'] = serpent.compile_lll
-            except ImportError:
-                pass
-            try:
-                import ethereum._solidity
-                s = ethereum._solidity.get_solidity()
+                import _solidity
+                s = _solidity.get_solidity()
                 if s:
                     self.compilers_['solidity'] = s.compile_rich
                 else:
@@ -705,21 +699,21 @@ class Compilers(Subdispatcher):
         except KeyError:
             raise MethodNotFoundError()
 
-    @public
-    @encode_res(data_encoder)
-    def compileSerpent(self, code):
-        try:
-            return self.compilers['serpent'](code)
-        except KeyError:
-            raise MethodNotFoundError()
+   # @public
+   # @encode_res(data_encoder)
+   # def compileSerpent(self, code):
+   #     try:
+   #         return self.compilers['serpent'](code)
+   #     except KeyError:
+   #         raise MethodNotFoundError()
 
-    @public
-    @encode_res(data_encoder)
-    def compileLLL(self, code):
-        try:
-            return self.compilers['lll'](code)
-        except KeyError:
-            raise MethodNotFoundError()
+   # @public
+   # @encode_res(data_encoder)
+   # def compileLLL(self, code):
+   #     try:
+   #         return self.compilers['lll'](code)
+   #     except KeyError:
+   #         raise MethodNotFoundError()
 
 
 class Miner(Subdispatcher):

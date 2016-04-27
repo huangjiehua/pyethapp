@@ -15,8 +15,7 @@ class Miner(gevent.Greenlet):
     rounds = 100
     max_elapsed = 1.
 
-    def __init__(self, mining_hash, block_number, difficulty, nonce_callback,
-                 hashrate_callback, cpu_pct=100):
+    def __init__(self, block_number, nonce_callback):
         self.mining_hash = mining_hash
         self.block_number = block_number
         self.difficulty = difficulty
@@ -111,27 +110,23 @@ class PoWService(BaseService):
     name = 'pow'
     default_config = dict(pow=dict(
         activated=False,
-        cpu_pct=100,
         coinbase_hex=None,
         mine_empty_blocks=True
     ))
 
     def __init__(self, app):
         super(PoWService, self).__init__(app)
-        cpu_pct = self.app.config['pow']['cpu_pct']
         self.cpipe, self.ppipe = gipc.pipe(duplex=True)
         self.worker_process = gipc.start_process(
-            target=powworker_process, args=(self.cpipe, cpu_pct))
+            target=powworker_process, args=(self.cpipe))
         self.app.services.chain.on_new_head_candidate_cbs.append(self.on_new_head_candidate)
-        self.hashrate = 0
 
     @property
     def active(self):
         return self.app.config['pow']['activated']
 
     def on_new_head_candidate(self, block):
-        log.debug('new head candidate', block_number=block.number,
-                  mining_hash=block.mining_hash.encode('hex'), activated=self.active)
+        log.debug('new head candidate', block_number=block.number, activated=self.active)
         if not self.active:
             return
         if self.app.services.chain.is_syncing:
@@ -140,10 +135,7 @@ class PoWService(BaseService):
                 not self.app.config['pow']['mine_empty_blocks']):
             return
 
-        log.debug('mining', difficulty=block.difficulty)
-        self.ppipe.put(('mine', dict(mining_hash=block.mining_hash,
-                                     block_number=block.number,
-                                     difficulty=block.difficulty)))
+        self.ppipe.put(('mine', dict( block_number=block.number)))
 
     def recv_hashrate(self, hashrate):
         log.trace('hashrate updated', hashrate=hashrate)

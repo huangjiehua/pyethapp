@@ -25,6 +25,7 @@ import ethereum.slogging as slogging
 import konfig
 from db_service import DBService
 from jsonrpc import JSONRPCServer, IPCRPCServer
+from pow_service import PoWService
 from accounts import AccountsService, Account
 from pyethapp import __version__
 from pyethapp.profiles import PROFILES, DEFAULT_PROFILE
@@ -34,7 +35,7 @@ import utils
 log = slogging.get_logger('app')
 
 
-services = [DBService, AccountsService, NodeDiscovery, PeerManager, ChainService, 
+services = [DBService, AccountsService, NodeDiscovery, PeerManager, ChainService, PoWService, 
             JSONRPCServer, IPCRPCServer, Console]
 
 
