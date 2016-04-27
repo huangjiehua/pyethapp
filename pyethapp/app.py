@@ -22,7 +22,7 @@ from eth_service import ChainService
 from console_service import Console
 from blocks import Block
 import ethereum.slogging as slogging
-import config as konfig
+import konfig
 from db_service import DBService
 from jsonrpc import JSONRPCServer, IPCRPCServer
 from pow_service import PoWService
