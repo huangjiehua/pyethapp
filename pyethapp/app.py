@@ -98,7 +98,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
             log.warning('empty config given. default config values will be used')
     else:  # load config from default or set data_dir
         config = konfig.load_config(data_dir)
-
     config['data_dir'] = data_dir
 
     # Store custom genesis to restore if overridden by profile value
@@ -111,6 +110,7 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
     # Set config values based on profile selection
     merge_dict(config, PROFILES[profile])
 
+    print config
     if genesis_from_config_file:
         # Fixed genesis_hash taken from profile must be deleted as custom genesis loaded
         del config['eth']['genesis_hash']
