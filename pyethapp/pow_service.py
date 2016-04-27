@@ -4,7 +4,7 @@ import gipc
 import random
 from devp2p.service import BaseService
 from devp2p.app import BaseApp
-from ethereum.ethpow import mine, TT64M1
+from ethpow import mine, TT64M1
 from ethereum.slogging import get_logger
 log = get_logger('pow')
 log_sub = get_logger('pow.subprocess')
@@ -15,39 +15,17 @@ class Miner(gevent.Greenlet):
     rounds = 100
     max_elapsed = 1.
 
-    def __init__(self, block_number, nonce_callback):
+    def __init__(self, mining_hash, block_number, nonce_callback):
         self.mining_hash = mining_hash
         self.block_number = block_number
-        self.difficulty = difficulty
-        self.nonce_callback = nonce_callback
-        self.hashrate_callback = hashrate_callback
-        self.cpu_pct = cpu_pct
         self.last = time.time()
         self.is_stopped = False
         super(Miner, self).__init__()
 
     def _run(self):
         nonce = random.randint(0, TT64M1)
-        while not self.is_stopped:
-            log_sub.trace('starting mining round')
-            st = time.time()
-            bin_nonce, mixhash = mine(self.block_number, self.difficulty, self.mining_hash,
-                                      start_nonce=nonce, rounds=self.rounds)
-            elapsed = time.time() - st
-            if bin_nonce:
-                log_sub.info('nonce found')
-                self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
-                break
-            delay = elapsed * (1 - self.cpu_pct / 100.)
-            hashrate = int(self.rounds // (elapsed + delay))
-            self.hashrate_callback(hashrate)
-            log_sub.trace('sleeping', delay=delay, elapsed=elapsed, rounds=self.rounds)
-            gevent.sleep(delay + 0.001)
-            nonce += self.rounds
-            # adjust
-            adjust = elapsed / self.max_elapsed
-            self.rounds = int(self.rounds / adjust)
-
+        bin_nonce, mixhash = mine(self.block_number, self.mining_hash, start_nonce=nonce, rounds=self.rounds)
+        self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
         log_sub.debug('mining task finished', is_stopped=self.is_stopped)
 
     def stop(self):
@@ -61,33 +39,22 @@ class PoWWorker(object):
     communicates with the parent process using: tuple(str_cmd, dict_kargs)
     """
 
-    def __init__(self, cpipe, cpu_pct):
+    def __init__(self, cpipe):
         self.cpipe = cpipe
         self.miner = None
-        self.cpu_pct = cpu_pct
 
     def send_found_nonce(self, bin_nonce, mixhash, mining_hash):
         log_sub.info('sending nonce')
         self.cpipe.put(('found_nonce', dict(bin_nonce=bin_nonce, mixhash=mixhash,
                                             mining_hash=mining_hash)))
 
-    def send_hashrate(self, hashrate):
-        log_sub.trace('sending hashrate')
-        self.cpipe.put(('hashrate', dict(hashrate=hashrate)))
-
-    def recv_set_cpu_pct(self, cpu_pct):
-        self.cpu_pct = max(0, min(100, cpu_pct))
-        if self.miner:
-            self.miner.cpu_pct = self.cpu_pct
-
-    def recv_mine(self, mining_hash, block_number, difficulty):
+    def recv_mine(self, mining_hash, block_number):
         "restarts the miner"
-        log_sub.debug('received new mining task', difficulty=difficulty)
+        log_sub.debug('received new mining task')
         assert isinstance(block_number, int)
         if self.miner:
             self.miner.stop()
-        self.miner = Miner(mining_hash, block_number, difficulty, self.send_found_nonce,
-                           self.send_hashrate, self.cpu_pct)
+        self.miner = Miner(mining_hash, block_number, self.send_found_nonce)
         self.miner.start()
 
     def run(self):
@@ -100,7 +67,7 @@ class PoWWorker(object):
 def powworker_process(cpipe, cpu_pct):
     "entry point in forked sub processes, setup env"
     gevent.get_hub().SYSTEM_ERROR = BaseException  # stop on any exception
-    PoWWorker(cpipe, cpu_pct).run()
+    PoWWorker(cpipe).run()
 
 
 # parent process defined below ##############################################3
@@ -126,7 +93,8 @@ class PoWService(BaseService):
         return self.app.config['pow']['activated']
 
     def on_new_head_candidate(self, block):
-        log.debug('new head candidate', block_number=block.number, activated=self.active)
+        log.debug('new head candidate', block_number=block.number,
+                  mining_hash=block.mining_hash.encode('hex'), activated=self.active)
         if not self.active:
             return
         if self.app.services.chain.is_syncing:
@@ -135,11 +103,8 @@ class PoWService(BaseService):
                 not self.app.config['pow']['mine_empty_blocks']):
             return
 
-        self.ppipe.put(('mine', dict( block_number=block.number)))
-
-    def recv_hashrate(self, hashrate):
-        log.trace('hashrate updated', hashrate=hashrate)
-        self.hashrate = hashrate
+        log.debug('mining')
+        self.ppipe.put(('mine', dict(mining_hash=block.mining_hash, block_number=block.number)))
 
     def recv_found_nonce(self, bin_nonce, mixhash, mining_hash):
         log.info('nonce found', mining_hash=mining_hash.encode('hex'))

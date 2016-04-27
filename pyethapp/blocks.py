@@ -237,6 +237,7 @@ class BlockHeader(rlp.Serializable):
     @property
     def mining_hash(self):
         return utils.sha3(rlp.encode(self, BlockHeader.exclude(['mixhash', 'nonce'])))
+
     def to_dict(self):
         """Serialize the header to a readable dictionary."""
         d = {}
@@ -1045,8 +1046,9 @@ class Block(rlp.Serializable):
             b['state'] = state_dump
         return b
 
+    @property
     def mining_hash(self):
-        return utils.sha3(rlp.encode(self.header, BlockHeader.exclude['mixhash', 'nonce']))
+        return utils.sha3(rlp.encode(self.header, BlockHeader.exclude(['mixhash', 'nonce'])))
 
     @property
     def get_parent(self):

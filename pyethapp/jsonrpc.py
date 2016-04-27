@@ -727,13 +727,6 @@ class Miner(Subdispatcher):
         return False
 
     @public
-    @encode_res(quantity_encoder)
-    def hashrate(self):
-        if self.mining():
-            return self.app.services.pow.hashrate
-        return 0
-
-    @public
     @encode_res(address_encoder)
     def coinbase(self):
         cb = self.app.services.accounts.coinbase
