@@ -183,10 +183,8 @@ def update_config_from_genesis_json(config, genesis_json_filename_or_dict):
 
     m = [
         ('GENESIS_INITIAL_ALLOC', 'alloc', lambda x: x),
-        ('GENESIS_DIFFICULTY',  'difficulty', parse_int_or_hex),
         ('GENESIS_TIMESTAMP',  'timestamp', parse_int_or_hex),
         ('GENESIS_EXTRA_DATA',  'extraData', _dec),
-        ('GENESIS_GAS_LIMIT',  'gasLimit', parse_int_or_hex),
         ('GENESIS_MIXHASH', 'mixhash', _dec),
         ('GENESIS_PREVHASH',  'parentHash', _dec),
         ('GENESIS_COINBASE',  'coinbase', _dec),

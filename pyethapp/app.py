@@ -25,7 +25,6 @@ import ethereum.slogging as slogging
 import konfig
 from db_service import DBService
 from jsonrpc import JSONRPCServer, IPCRPCServer
-from pow_service import PoWService
 from accounts import AccountsService, Account
 from pyethapp import __version__
 from pyethapp.profiles import PROFILES, DEFAULT_PROFILE
@@ -110,7 +109,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
     # Set config values based on profile selection
     merge_dict(config, PROFILES[profile])
 
-    print config
     if genesis_from_config_file:
         # Fixed genesis_hash taken from profile must be deleted as custom genesis loaded
         del config['eth']['genesis_hash']
@@ -130,7 +128,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
         # Fixed genesis_hash taked from profile must be deleted as custom genesis loaded
         if 'genesis_hash' in config['eth']:
             del config['eth']['genesis_hash']
-
     # Load genesis config
     konfig.update_config_from_genesis_json(config,
                                            genesis_json_filename_or_dict=config['eth']['genesis'])
