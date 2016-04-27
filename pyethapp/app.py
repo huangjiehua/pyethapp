@@ -35,7 +35,7 @@ import utils
 log = slogging.get_logger('app')
 
 
-services = [DBService, AccountsService, NodeDiscovery, PeerManager, ChainService, PoWService,
+services = [DBService, AccountsService, NodeDiscovery, PeerManager, ChainService, 
             JSONRPCServer, IPCRPCServer, Console]
 
 
@@ -75,14 +75,12 @@ class EthApp(BaseApp):
               help="Log to file instead of stderr.")
 @click.option('-b', '--bootstrap_node', multiple=False, type=str,
               help='single bootstrap_node as enode://pubkey@host:port')
-@click.option('-m', '--mining_pct', multiple=False, type=int, default=0,
-              help='pct cpu used for mining')
 @click.option('--unlock', multiple=True, type=str,
               help='Unlock an account (prompts for password)')
 @click.option('--password', type=click.File(), help='path to a password file')
 @click.pass_context
 def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, bootstrap_node, log_json,
-        mining_pct, unlock, password, log_file):
+        unlock, password, log_file):
     # configure logging
     slogging.configure(log_config, log_json=log_json, log_file=log_file)
 
@@ -105,7 +103,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
 
     # Store custom genesis to restore if overridden by profile value
     genesis_from_config_file = config.get('eth', {}).get('genesis')
-
     # add default config
     konfig.update_config_with_defaults(config, konfig.get_default_config([EthApp] + services))
 
@@ -139,11 +136,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
                                            genesis_json_filename_or_dict=config['eth']['genesis'])
     if bootstrap_node:
         config['discovery']['bootstrap_nodes'] = [bytes(bootstrap_node)]
-    if mining_pct > 0:
-        config['pow']['activated'] = True
-        config['pow']['cpu_pct'] = int(min(100, mining_pct))
-    if not config.get('pow', {}).get('activated'):
-        config['deactivated_services'].append(PoWService.name)
 
     ctx.obj = {'config': config,
                'unlock': unlock,
@@ -157,7 +149,6 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
 @click.option('--dev/--nodev', default=False,
               help='Drop into interactive debugger on unhandled exceptions.')
 @click.option('--nodial/--dial',  default=False, help='Do not dial nodes.')
-@click.option('--fake/--nofake',  default=False, help='Fake genesis difficulty.')
 @click.option('--console',  is_flag=True, help='Immediately drop into interactive console.')
 @click.pass_context
 def run(ctx, dev, nodial, fake, console):
@@ -170,12 +161,6 @@ def run(ctx, dev, nodial, fake, console):
         config['discovery']['listen_port'] = 29873
         config['p2p']['listen_port'] = 29873
         config['p2p']['min_peers'] = 0
-
-    if fake:
-        from ethereum import blocks
-        blocks.GENESIS_DIFFICULTY = 1024
-        blocks.BLOCK_DIFF_FACTOR = 16
-        blocks.MIN_GAS_LIMIT = blocks.default_config['GENESIS_GAS_LIMIT'] / 2
 
     # create app
     app = EthApp(config)

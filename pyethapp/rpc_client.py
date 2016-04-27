@@ -6,7 +6,6 @@ from tinyrpc.transports.http import HttpPostClientTransport
 from pyethapp.jsonrpc import quantity_encoder, quantity_decoder
 from pyethapp.jsonrpc import data_encoder, data_decoder, address_decoder
 from pyethapp.jsonrpc import address_encoder as _address_encoder
-from pyethapp.jsonrpc import default_gasprice, default_startgas
 from ethereum.transactions import Transaction
 from ethereum.keys import privtoaddr
 from ethereum import abi
@@ -129,12 +128,10 @@ class JSONRPCClient(object):
             return [{k: decoders[k](v) for k, v in c.items() if v is not None} for c in changes]
 
     def eth_sendTransaction(self, nonce=None, sender='', to='', value=0, data='',
-                            gasPrice=default_gasprice, gas=default_startgas,
                             v=None, r=None, s=None):
         to = normalize_address(to, allow_blank=True)
         encoders = dict(nonce=quantity_encoder, sender=address_encoder, to=data_encoder,
-                        value=quantity_encoder, gasPrice=quantity_encoder,
-                        gas=quantity_encoder, data=data_encoder,
+                        value=quantity_encoder, data=data_encoder,
                         v=quantity_encoder, r=quantity_encoder, s=quantity_encoder)
         data = {k: encoders[k](v) for k, v in locals().items()
                 if k not in ('self', 'encoders') and v is not None}
@@ -143,15 +140,13 @@ class JSONRPCClient(object):
         res = self.call('eth_sendTransaction', data)
         return data_decoder(res)
 
-    def eth_call(self, sender='', to='', value=0, data='',
-                 startgas=default_startgas, gasprice=default_gasprice):
+    def eth_call(self, sender='', to='', value=0, data=''):
         "call on pending block"
         encoders = dict(sender=address_encoder, to=data_encoder,
-                        value=quantity_encoder, gasprice=quantity_encoder,
-                        startgas=quantity_encoder, data=data_encoder)
+                        value=quantity_encoder, data=data_encoder)
         data = {k: encoders[k](v) for k, v in locals().items()
                 if k not in ('self', 'encoders') and v is not None}
-        for k, v in dict(gasprice='gasPrice', startgas='gas', sender='from').items():
+        for k, v in dict(sender='from').items():
             data[v] = data.pop(k)
         res = self.call('eth_call', data)
         return data_decoder(res)
@@ -174,14 +169,7 @@ class JSONRPCClient(object):
             self.call('eth_getBalance', address_encoder(account), 'pending'))
         return b
 
-    def gaslimit(self):
-        return quantity_decoder(self.call('eth_gasLimit'))
-
-    def lastgasprice(self):
-        return quantity_decoder(self.call('eth_lastGasPrice'))
-
-    def send_transaction(self, sender, to, value=0, data='', startgas=0,
-                         gasprice=10 * denoms.szabo, nonce=None):
+    def send_transaction(self, sender, to, value=0, data='', nonce=None):
         "can send a locally signed transaction if privkey is given"
         assert self.privkey or sender
         if self.privkey:
@@ -195,17 +183,13 @@ class JSONRPCClient(object):
 
 
         assert sender
-        if not startgas:
-            startgas = quantity_decoder(self.call('eth_gasLimit')) - 1
 
         # create transaction
-        tx = Transaction(nonce, gasprice, startgas, to=to, value=value, data=data)
+        tx = Transaction(nonce, to=to, value=value, data=data)
         if self.privkey:
             tx.sign(self.privkey)
         tx_dict = tx.to_dict()
         tx_dict.pop('hash')
-        for k, v in dict(gasprice='gasPrice', startgas='gas').items():
-            tx_dict[v] = tx_dict.pop(k)
         tx_dict['sender'] = sender
         res = self.eth_sendTransaction(**tx_dict)
         assert len(res) in (20, 32)
@@ -227,7 +211,7 @@ class ABIContract():
         self.abi = _abi
         self.address = address = normalize_address(address)
         sender = normalize_address(sender)
-        valid_kargs = set(('gasprice', 'startgas', 'value'))
+        valid_kargs = set(('value'))
 
         class abi_method(object):
 
