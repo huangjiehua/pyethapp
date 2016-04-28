@@ -171,11 +171,11 @@ class ChainService(WiredService):
     def is_syncing(self):
         return self.synchronizer.synctask is not None
 
-#    @property
-#    def is_mining(self):
-#        if 'pow' in self.app.services:
-#            return self.app.services.pow.active
-#        return False
+    @property
+    def is_mining(self):
+        if 'pow' in self.app.services:
+            return self.app.services.pow.active
+        return False
 
     def _on_new_head(self, block):
         log.debug('new head cbs', num=len(self.on_new_head_cbs))

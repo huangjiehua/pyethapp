@@ -18,14 +18,16 @@ class Miner(gevent.Greenlet):
     def __init__(self, mining_hash, block_number, nonce_callback):
         self.mining_hash = mining_hash
         self.block_number = block_number
+        self.nonce_callback = nonce_callback;
         self.last = time.time()
         self.is_stopped = False
         super(Miner, self).__init__()
 
     def _run(self):
         nonce = random.randint(0, TT64M1)
-        bin_nonce, mixhash = mine(self.block_number, self.mining_hash, start_nonce=nonce, rounds=self.rounds)
-        self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
+        if not self.is_stopped:
+            bin_nonce, mixhash = mine(self.block_number, self.mining_hash, start_nonce=nonce, rounds=self.rounds)
+            self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
         log_sub.debug('mining task finished', is_stopped=self.is_stopped)
 
     def stop(self):
@@ -64,7 +66,7 @@ class PoWWorker(object):
             getattr(self, 'recv_' + cmd)(**kargs)
 
 
-def powworker_process(cpipe, cpu_pct):
+def powworker_process(cpipe):
     "entry point in forked sub processes, setup env"
     gevent.get_hub().SYSTEM_ERROR = BaseException  # stop on any exception
     PoWWorker(cpipe).run()
@@ -82,6 +84,7 @@ class PoWService(BaseService):
     ))
 
     def __init__(self, app):
+        log.info("--init--")
         super(PoWService, self).__init__(app)
         self.cpipe, self.ppipe = gipc.pipe(duplex=True)
         self.worker_process = gipc.start_process(

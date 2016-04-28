@@ -260,7 +260,8 @@ class Chain(object):
 
         self.index.add_block(block)
         self._store_block(block)
-
+        
+        self._update_head(block, forward_pending_transactions)
         # set to head if this makes the longest chain w/ most work for that number
         block.transactions.clear_all()
         block.receipts.clear_all()
