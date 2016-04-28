@@ -70,6 +70,7 @@ class DuplicatesFilter(object):
 
 
 def update_watcher(chainservice):
+    print "hello"
     timeout = 180
     d = dict(head=chainservice.chain.head)
 

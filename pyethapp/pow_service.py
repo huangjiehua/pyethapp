@@ -84,7 +84,6 @@ class PoWService(BaseService):
     ))
 
     def __init__(self, app):
-        log.info("--init--")
         super(PoWService, self).__init__(app)
         self.cpipe, self.ppipe = gipc.pipe(duplex=True)
         self.worker_process = gipc.start_process(
