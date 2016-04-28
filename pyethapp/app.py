@@ -211,7 +211,6 @@ def run(ctx, dev, nodial, console):
 
     if config['post_app_start_callback'] is not None:
         config['post_app_start_callback'](app)
-
     # wait for interrupt
     evt = Event()
     gevent.signal(signal.SIGQUIT, evt.set)

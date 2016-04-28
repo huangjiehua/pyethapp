@@ -269,7 +269,6 @@ class Console(BaseService):
 
         for k, v in self.app.script_globals.items():
             self.console_locals[k] = v
-
     def _run(self):
         self.interrupt.wait()
         print('\n' * 2)

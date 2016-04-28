@@ -235,7 +235,6 @@ class ChainService(WiredService):
     def add_mined_block(self, block):
         log.debug('adding mined block', block=block)
         assert isinstance(block, Block)
-        assert block.header.check_pow()
         if self.chain.add_block(block):
             log.debug('added', block=block, ts=time.time())
             assert block == self.chain.head
@@ -268,11 +267,6 @@ class ChainService(WiredService):
                     self.block_queue.get()
                     continue
                 # FIXME, this is also done in validation and in synchronizer for new_blocks
-                if not t_block.header.check_pow():
-                    log.warn('invalid pow', block=t_block, FIXME='ban node')
-                    sentry.warn_invalid(t_block, 'InvalidBlockNonce')
-                    self.block_queue.get()
-                    continue
                 try:  # deserialize
                     st = time.time()
                     block = t_block.to_block(env=self.chain.env)
@@ -338,7 +332,7 @@ class ChainService(WiredService):
         if self.broadcast_filter.update(tx.hash):
             log.debug('broadcasting tx', origin=origin)
             bcast = self.app.services.peermanager.broadcast
-            bcast(eth_protocol.ETHProtocol, 'transactions', args=(tx,),
+            bcast(eth_protocol.ETHProtocol, 'transactions', args=(tx),
                   exclude_peers=[origin.peer] if origin else [])
         else:
             log.debug('already broadcasted tx')
