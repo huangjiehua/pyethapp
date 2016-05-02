@@ -9,17 +9,16 @@ PROFILES = {
     'livenet': {
         'eth': {
             'network_id': 1,
-           'genesis': path.join(genesisdata_dir, 'genesis_ldmc.json'),
+            'genesis': path.join(genesisdata_dir, 'genesis_ldmc.json'),
 #           'genesis_hash': 'd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3',
         },
         'discovery': {
             'bootstrap_nodes': [
-                 (
-                    'enode://a174f2ca13bb2d156875698acf537757088c9b2c10d3a23d81f1180305788942'
-                     'e408103176575ccea68b3b2cdd917e5e1e0cb7208505fa54a6e8ae9231f2dbd1'
-                     '@127.0.0.1:30303'
-
-                 ) 
+#                (
+#                   'enode://a174f2ca13bb2d156875698acf537757088c9b2c10d3a23d81f1180305788942'
+#                    'e408103176575ccea68b3b2cdd917e5e1e0cb7208505fa54a6e8ae9231f2dbd1'
+#                    '@127.0.0.1:30303'
+#                ) 
 #                (  # C++
 #                    'enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263fa'
 #                    'ba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a'

@@ -15,14 +15,12 @@ from ethereum.securetrie import SecureTrie
 from ethereum import utils
 from ethereum.utils import address, int256, trie_root, hash32, to_string
 from ethereum import processblock
-import transactions
 from transactions import Transaction
 from ethereum import bloom
 from ethereum.exceptions import UnknownParentException, VerificationFailed
 from ethereum.slogging import get_logger
-import db
+from ethpow import check_pow
 from db import BaseDB
-import config
 from config import Env, default_config
 
 if sys.version_info.major == 2:
@@ -237,6 +235,17 @@ class BlockHeader(rlp.Serializable):
     @property
     def mining_hash(self):
         return utils.sha3(rlp.encode(self, BlockHeader.exclude(['mixhash', 'nonce'])))
+
+    def check_pow(self, nonce=None):
+        """Check if the proof-of-work of the block is valid.
+
+        :param nonce: if given the proof of work function will be evaluated
+                      with this nonce instead of the one already present in
+                      the header
+        :returns: `True` or `False`
+        """
+        log.debug('checking pow', block=self.hex_hash()[:8])
+        return check_pow(self.number, self.mining_hash, self.mixhash, nonce or self.nonce)
 
     def to_dict(self):
         """Serialize the header to a readable dictionary."""

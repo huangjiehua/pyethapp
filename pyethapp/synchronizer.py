@@ -31,14 +31,13 @@ class SyncTask(object):
     blocks_request_timeout = 32.
     blockhashes_request_timeout = 32.
 
-    def __init__(self, synchronizer, proto, blockhash, chain_difficulty=0, originator_only=False):
+    def __init__(self, synchronizer, proto, blockhash, originator_only=False):
         self.synchronizer = synchronizer
         self.chain = synchronizer.chain
         self.chainservice = synchronizer.chainservice
         self.originating_proto = proto
         self.originator_only = originator_only
         self.blockhash = blockhash
-        self.chain_difficulty = chain_difficulty
         self.requests = dict()  # proto: Event
         self.start_block_number = self.chain.head.number
         self.end_block_number = self.start_block_number + 1  # minimum synctask
@@ -210,8 +209,6 @@ class SyncTask(object):
         assert last_block.header.hash == self.blockhash
         log_st.debug('syncing finished')
         # at this point blocks are not in the chain yet, but in the add_block queue
-        if self.chain_difficulty >= self.chain.head.chain_difficulty():
-            self.chainservice.broadcast_newblock(last_block, self.chain_difficulty, origin=proto)
 
         self.exit(success=True)
 
@@ -286,16 +283,12 @@ class Synchronizer(object):
         self._protocols = dict((p, cd) for p, cd in self._protocols.items() if not p.is_stopped)
         return sorted(self._protocols.keys(), key=lambda p: self._protocols[p], reverse=True)
 
-    def receive_newblock(self, proto, t_block, chain_difficulty):
+    def receive_newblock(self, proto, t_block):
         "called if there's a newblock announced on the network"
-        log.debug('newblock', proto=proto, block=t_block, chain_difficulty=chain_difficulty,
+        log.debug('newblock', proto=proto, block=t_block,
                   client=proto.peer.remote_client_version)
 
-        if t_block.header.hash in self.chain:
-            assert chain_difficulty == self.chain.get(t_block.header.hash).chain_difficulty()
 
-        # memorize proto with difficulty
-        self._protocols[proto] = chain_difficulty
 
         if self.chainservice.knows_block(block_hash=t_block.header.hash):
             log.debug('known block')
@@ -306,22 +299,8 @@ class Synchronizer(object):
             log.warn('check pow failed, should ban!')
             return
 
-        expected_difficulty = self.chain.head.chain_difficulty() + t_block.header.difficulty
-        if chain_difficulty >= self.chain.head.chain_difficulty():
-            # broadcast duplicates filtering is done in eth_service
-            log.debug('sufficient difficulty, broadcasting',
-                      client=proto.peer.remote_client_version)
-            self.chainservice.broadcast_newblock(t_block, chain_difficulty, origin=proto)
-        else:
-            # any criteria for which blocks/chains not to add?
-            age = self.chain.head.number - t_block.header.number
-            log.debug('low difficulty', client=proto.peer.remote_client_version,
-                      chain_difficulty=chain_difficulty, expected_difficulty=expected_difficulty,
-                      block_age=age)
-            if age > self.MAX_NEWBLOCK_AGE:
-                log.debug('newblock is too old, not adding', block_age=age,
-                          max_age=self.MAX_NEWBLOCK_AGE)
-                return
+        log.debug('broadcasting', client=proto.peer.remote_client_version)
+        self.chainservice.broadcast_newblock(t_block, origin=proto)
 
         # unknown and pow check and highest difficulty
 
@@ -332,29 +311,24 @@ class Synchronizer(object):
         else:
             log.debug('missing parent')
             if not self.synctask:
-                self.synctask = SyncTask(self, proto, t_block.header.hash, chain_difficulty)
+                self.synctask = SyncTask(self, proto, t_block.header.hash)
             else:
                 log.debug('existing task, discarding')
 
-    def receive_status(self, proto, blockhash, chain_difficulty):
+    def receive_status(self, proto, blockhash):
         "called if a new peer is connected"
-        log.debug('status received', proto=proto, chain_difficulty=chain_difficulty)
+        log.debug('status received', proto=proto)
 
-        # memorize proto with difficulty
-        self._protocols[proto] = chain_difficulty
 
         if self.chainservice.knows_block(blockhash) or self.synctask:
             log.debug('existing task or known hash, discarding')
             return
 
         if self.force_sync:
-            blockhash, chain_difficulty = self.force_sync
+            blockhash = self.force_sync
             log.debug('starting forced syctask', blockhash=blockhash.encode('hex'))
-            self.synctask = SyncTask(self, proto, blockhash, chain_difficulty)
+            self.synctask = SyncTask(self, proto, blockhash)
 
-        elif chain_difficulty > self.chain.head.chain_difficulty():
-            log.debug('sufficient difficulty')
-            self.synctask = SyncTask(self, proto, blockhash, chain_difficulty)
 
     def receive_newblockhashes(self, proto, newblockhashes):
         """

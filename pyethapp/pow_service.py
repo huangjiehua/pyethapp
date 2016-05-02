@@ -26,8 +26,13 @@ class Miner(gevent.Greenlet):
     def _run(self):
         nonce = random.randint(0, TT64M1)
         if not self.is_stopped:
+            log_sub.trace('starting mining round')
             bin_nonce, mixhash = mine(self.block_number, self.mining_hash, start_nonce=nonce, rounds=self.rounds)
-            self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
+            if bin_nonce:
+                log_sub.info('nonce found')
+                self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
+            gevent.sleep(1 + 0.001)
+
         log_sub.debug('mining task finished', is_stopped=self.is_stopped)
 
     def stop(self):
@@ -66,8 +71,9 @@ class PoWWorker(object):
             getattr(self, 'recv_' + cmd)(**kargs)
 
 
-def powworker_process(cpipe):
+def powworker_process(cpipe, a):
     "entry point in forked sub processes, setup env"
+    b=a
     gevent.get_hub().SYSTEM_ERROR = BaseException  # stop on any exception
     PoWWorker(cpipe).run()
 
@@ -87,7 +93,7 @@ class PoWService(BaseService):
         super(PoWService, self).__init__(app)
         self.cpipe, self.ppipe = gipc.pipe(duplex=True)
         self.worker_process = gipc.start_process(
-            target=powworker_process, args=(self.cpipe))
+            target=powworker_process, args=(self.cpipe, 1))
         self.app.services.chain.on_new_head_candidate_cbs.append(self.on_new_head_candidate)
 
     @property

@@ -1,39 +1,40 @@
 # -*- coding: utf8 -*-
-import blocks
-from logging import StreamHandler
-from IPython.core import ultratb
+import copy
 import json
 import os
 import signal
 import sys
-import copy
+from logging import StreamHandler
 from uuid import uuid4
+
 import click
-from click import BadParameter
-import gevent
-from gevent.event import Event
-import rlp
-from devp2p.service import BaseService
-from devp2p.peermanager import PeerManager
-from devp2p.discovery import NodeDiscovery
-from devp2p.app import BaseApp
-import eth_protocol
-from eth_service import ChainService
-from console_service import Console
-from blocks import Block
 import ethereum.slogging as slogging
+import gevent
+import rlp
+from click import BadParameter
+from devp2p.app import BaseApp
+from devp2p.discovery import NodeDiscovery
+from devp2p.peermanager import PeerManager
+from devp2p.service import BaseService
+import blocks
+from blocks import Block
+from gevent.event import Event
+
 import konfig
+import eth_protocol
+import utils
+from accounts import AccountsService, Account
+from console_service import Console
 from db_service import DBService
+from eth_service import ChainService
 from jsonrpc import JSONRPCServer, IPCRPCServer
 from pow_service import PoWService
-from accounts import AccountsService, Account
 from pyethapp import __version__
 from pyethapp.profiles import PROFILES, DEFAULT_PROFILE
-from pyethapp.utils import merge_dict, load_contrib_services, FallbackChoice
-import utils
+from pyethapp.utils import merge_dict, load_contrib_services, FallbackChoice, enable_greenlet_debugger
+
 
 log = slogging.get_logger('app')
-
 
 services = [DBService, AccountsService, NodeDiscovery, PeerManager, ChainService, PoWService, 
             JSONRPCServer, IPCRPCServer, Console]
@@ -89,6 +90,7 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
     data_dir = alt_data_dir or konfig.default_data_dir
     konfig.setup_data_dir(data_dir)  # if not available, sets up data_dir and required config
     log.info('using data in', path=data_dir)
+
     # prepare configuration
     # config files only contain required config (privkeys) and config different from the default
     if alt_config:  # specified config file
@@ -97,10 +99,12 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
             log.warning('empty config given. default config values will be used')
     else:  # load config from default or set data_dir
         config = konfig.load_config(data_dir)
+
     config['data_dir'] = data_dir
 
     # Store custom genesis to restore if overridden by profile value
     genesis_from_config_file = config.get('eth', {}).get('genesis')
+
     # add default config
     konfig.update_config_with_defaults(config, konfig.get_default_config([EthApp] + services))
 
@@ -108,6 +112,7 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
 
     # Set config values based on profile selection
     merge_dict(config, PROFILES[profile])
+
     if genesis_from_config_file:
         # Fixed genesis_hash taken from profile must be deleted as custom genesis loaded
         del config['eth']['genesis_hash']
@@ -127,11 +132,14 @@ def app(ctx, profile, alt_config, config_values, alt_data_dir, log_config, boots
         # Fixed genesis_hash taked from profile must be deleted as custom genesis loaded
         if 'genesis_hash' in config['eth']:
             del config['eth']['genesis_hash']
+
     # Load genesis config
     konfig.update_config_from_genesis_json(config,
                                            genesis_json_filename_or_dict=config['eth']['genesis'])
     if bootstrap_node:
         config['discovery']['bootstrap_nodes'] = [bytes(bootstrap_node)]
+    if not config.get('pow', {}).get('activated'):
+        config['deactivated_services'].append(PoWService.name)
 
     ctx.obj = {'config': config,
                'unlock': unlock,
@@ -160,10 +168,10 @@ def run(ctx, dev, nodial, console):
 
     # create app
     app = EthApp(config)
+
     # development mode
     if dev:
-        gevent.get_hub().SYSTEM_ERROR = BaseException
-        sys.excepthook = ultratb.VerboseTB(call_pdb=True, tb_offset=6)
+        enable_greenlet_debugger()
         try:
             config['client_version'] += '/' + os.getlogin()
         except:
@@ -211,6 +219,7 @@ def run(ctx, dev, nodial, console):
 
     if config['post_app_start_callback'] is not None:
         config['post_app_start_callback'](app)
+
     # wait for interrupt
     evt = Event()
     gevent.signal(signal.SIGQUIT, evt.set)

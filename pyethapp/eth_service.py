@@ -1,21 +1,17 @@
 import time
-import config as ethereum_config
 from config import Env
 from ethereum.utils import sha3
 import rlp
 from rlp.utils import encode_hex
 import processblock
+import config as ethereum_config
 from synchronizer import Synchronizer
 from ethereum.slogging import get_logger
 from processblock import validate_transaction
-from ethereum.exceptions import InvalidTransaction, InvalidNonce, \
-    InsufficientBalance, InsufficientStartGas
-import chain
+from ethereum.exceptions import InvalidNonce, InsufficientBalance, InvalidTransaction
 from chain import Chain
 from ethereum.refcount_db import RefcountDB
-import blocks
 from blocks import Block, VerificationFailed
-import transactions
 from transactions import Transaction
 from devp2p.service import WiredService
 from devp2p.protocol import BaseProtocol
@@ -70,7 +66,6 @@ class DuplicatesFilter(object):
 
 
 def update_watcher(chainservice):
-    print "hello"
     timeout = 180
     d = dict(head=chainservice.chain.head)
 
@@ -107,7 +102,6 @@ class ChainService(WiredService):
     config = None
     block_queue_size = 1024
     transaction_queue_size = 1024
-#    processed_gas = 0
     processed_elapsed = 0
 
     def __init__(self, app):
@@ -235,6 +229,7 @@ class ChainService(WiredService):
     def add_mined_block(self, block):
         log.debug('adding mined block', block=block)
         assert isinstance(block, Block)
+        assert block.header.check_pow()
         if self.chain.add_block(block):
             log.debug('added', block=block, ts=time.time())
             assert block == self.chain.head
@@ -267,6 +262,11 @@ class ChainService(WiredService):
                     self.block_queue.get()
                     continue
                 # FIXME, this is also done in validation and in synchronizer for new_blocks
+                if not t_block.header.check_pow():
+                    log.warn('invalid pow', block=t_block, FIXME='ban node')
+                    sentry.warn_invalid(t_block, 'InvalidBlockNonce')
+                    self.block_queue.get()
+                    continue
                 try:  # deserialize
                     st = time.time()
                     block = t_block.to_block(env=self.chain.env)
@@ -332,7 +332,7 @@ class ChainService(WiredService):
         if self.broadcast_filter.update(tx.hash):
             log.debug('broadcasting tx', origin=origin)
             bcast = self.app.services.peermanager.broadcast
-            bcast(eth_protocol.ETHProtocol, 'transactions', args=(tx),
+            bcast(eth_protocol.ETHProtocol, 'transactions', args=(tx,),
                   exclude_peers=[origin.peer] if origin else [])
         else:
             log.debug('already broadcasted tx')
@@ -383,18 +383,18 @@ class ChainService(WiredService):
         self.synchronizer.receive_status(proto, chain_head_hash)
 
         # send transactions
-        transaction = self.chain.get_transactions()
-        if transaction:
+        transactions = self.chain.get_transactions()
+        if transactions:
             log.debug("sending transactions", remote_id=proto)
-            proto.send_transactions(*transaction)
+            proto.send_transactions(*transactions)
 
     # transactions
 
-    def on_receive_transactions(self, proto, transaction):
+    def on_receive_transactions(self, proto, transactions):
         "receives rlp.decoded serialized"
         log.debug('----------------------------------')
-        log.debug('remote_transactions_received', count=len(transaction), remote_id=proto)
-        for tx in transaction:
+        log.debug('remote_transactions_received', count=len(transactions), remote_id=proto)
+        for tx in transactions:
             self.add_transaction(tx, origin=proto)
 
     # blockhashes ###########

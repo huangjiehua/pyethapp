@@ -38,8 +38,7 @@ class ETHProtocol(BaseProtocol):
         """
         protocolVersion: The version of the Ethereum protocol this peer implements. 30 at present.
         networkID: The network version of Ethereum for this peer. 0 for the official testnet.
-        totalDifficulty: Total Difficulty of the best chain. Integer, as found in block header.
-        latestHash: The hash of the block with the highest validated total difficulty.
+        latestHash: The hash of the block.
         GenesisHash: The hash of the Genesis block.
         """
         cmd_id = 0
@@ -48,14 +47,13 @@ class ETHProtocol(BaseProtocol):
         structure = [
             ('eth_version', rlp.sedes.big_endian_int),
             ('network_id', rlp.sedes.big_endian_int),
-            ('chain_difficulty', rlp.sedes.big_endian_int),
             ('chain_head_hash', rlp.sedes.binary),
             ('genesis_hash', rlp.sedes.binary)]
 
-        def create(self, proto, chain_difficulty, chain_head_hash, genesis_hash):
+        def create(self, proto, chain_head_hash, genesis_hash):
             self.sent = True
             network_id = proto.service.app.config['eth'].get('network_id', proto.network_id)
-            return [proto.version, network_id, chain_difficulty, chain_head_hash, genesis_hash]
+            return [proto.version, network_id, chain_head_hash, genesis_hash]
 
     class newblockhashes(BaseProtocol.command):
 
@@ -143,13 +141,13 @@ class ETHProtocol(BaseProtocol):
     class newblock(BaseProtocol.command):
 
         """
-        NewBlock [+0x07, [blockHeader, transactionList, uncleList], totalDifficulty]
+        NewBlock [+0x07, [blockHeader, transactionList]]
         Specify a single block that the peer should know about.
         The composite item in the list (following the message ID) is a block in
         the format described in the main Ethereum specification.
         """
         cmd_id = 7
-        structure = [('block', Block), ('chain_difficulty', rlp.sedes.big_endian_int)]
+        structure = [('block', Block)]
 
         # todo: bloomfilter: so we don't send block to the originating peer
 
@@ -160,8 +158,7 @@ class ETHProtocol(BaseProtocol):
             ll = rlp.decode_lazy(rlp_data)
             assert len(ll) == 2
             transient_block = TransientBlock(ll[0], time.time())
-            difficulty = rlp.sedes.big_endian_int.deserialize(ll[1])
-            data = [transient_block, difficulty]
+            data = [transient_block]
             return dict((cls.structure[i][0], v) for i, v in enumerate(data))
 
     class getblockhashesfromnumber(BaseProtocol.command):
@@ -217,18 +214,16 @@ class TransientBlock(rlp.Serializable):
     fields = [
         ('header', BlockHeader),
         ('transaction_list', rlp.sedes.CountableList(Transaction)),
-        ('uncles', rlp.sedes.CountableList(BlockHeader))
     ]
 
     def __init__(self, block_data, newblock_timestamp=0):
         self.newblock_timestamp = newblock_timestamp
         self.header = BlockHeader.deserialize(block_data[0])
         self.transaction_list = rlp.sedes.CountableList(Transaction).deserialize(block_data[1])
-        self.uncles = rlp.sedes.CountableList(BlockHeader).deserialize(block_data[2])
 
     def to_block(self, env, parent=None):
         """Convert the transient block to a :class:`ethereum.blocks.Block`"""
-        return Block(self.header, self.transaction_list, self.uncles, env=env, parent=parent)
+        return Block(self.header, self.transaction_list, env=env, parent=parent)
 
     @property
     def hex_hash(self):
