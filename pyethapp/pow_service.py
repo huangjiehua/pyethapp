@@ -73,7 +73,6 @@ class PoWWorker(object):
 
 def powworker_process(cpipe, a):
     "entry point in forked sub processes, setup env"
-    b=a
     gevent.get_hub().SYSTEM_ERROR = BaseException  # stop on any exception
     PoWWorker(cpipe).run()
 

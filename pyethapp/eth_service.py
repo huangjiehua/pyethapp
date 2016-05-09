@@ -123,6 +123,7 @@ class ChainService(WiredService):
                     "Can not disable pruning now".format(self.config['data_dir']))
             self.db.put("I am not pruning", "1")
 
+        print 'HEAD' in self.db
         if 'network_id' in self.db:
             db_network_id = self.db.get('network_id')
             if db_network_id != str(sce['network_id']):
@@ -138,7 +139,6 @@ class ChainService(WiredService):
             self.db.commit()
 
         assert self.db is not None
-
         super(ChainService, self).__init__(app)
         log.info('initializing chain')
         coinbase = app.services.accounts.coinbase
