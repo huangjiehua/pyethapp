@@ -18,7 +18,7 @@ import IPython
 import IPython.core.shellapp
 from IPython.lib.inputhook import inputhook_manager, stdin_ready
 from ethereum.slogging import getLogger
-import transactions 
+from ethereum import transactions 
 from transactions import Transaction
 from ethereum.utils import denoms, normalize_address as _normalize_address, bcolors as bc
 

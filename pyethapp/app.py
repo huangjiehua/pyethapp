@@ -16,7 +16,7 @@ from devp2p.app import BaseApp
 from devp2p.discovery import NodeDiscovery
 from devp2p.peermanager import PeerManager
 from devp2p.service import BaseService
-import blocks
+from ethereum import blocks
 from blocks import Block
 from gevent.event import Event
 

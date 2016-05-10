@@ -2,8 +2,7 @@
 import sys
 
 from devp2p.service import BaseService
-import db
-from db import BaseDB
+from ethereum.db import BaseDB
 from ethereum.slogging import get_logger
 from ephemdb_service import EphemDB
 

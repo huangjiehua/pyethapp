@@ -8,13 +8,13 @@ from copy import deepcopy
 from decorator import decorator
 from collections import Iterable
 import inspect
-import blocks
+from ethereum import blocks
 from ethereum.utils import (is_numeric, is_string, int_to_big_endian, big_endian_to_int,
                             encode_hex, decode_hex, sha3, zpad)
 import ethereum.slogging as slogging
 from ethereum.slogging import LogRecorder
-from transactions import Transaction
-import processblock
+from ethereum.transactions import Transaction
+from ethereum import processblock
 import gevent
 import gevent.wsgi
 import gevent.queue

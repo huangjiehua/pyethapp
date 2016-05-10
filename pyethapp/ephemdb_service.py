@@ -1,6 +1,6 @@
 from devp2p.service import BaseService
 from gevent.event import Event
-import db
+from ethereum import db
 from db import _EphemDB
 from logging import getLogger
 

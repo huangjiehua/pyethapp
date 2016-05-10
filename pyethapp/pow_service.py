@@ -4,7 +4,7 @@ import gipc
 import random
 from devp2p.service import BaseService
 from devp2p.app import BaseApp
-from ethpow import mine, TT64M1
+from ethereum.ethpow import mine, TT64M1
 from ethereum.slogging import get_logger
 log = get_logger('pow')
 log_sub = get_logger('pow.subprocess')
@@ -27,7 +27,7 @@ class Miner(gevent.Greenlet):
         nonce = random.randint(0, TT64M1)
         if not self.is_stopped:
             log_sub.trace('starting mining round')
-            bin_nonce, mixhash = mine(self.block_number, self.mining_hash, start_nonce=nonce, rounds=self.rounds)
+            bin_nonce, mixhash = mine(self.block_number, self.mining_hash, nonce, self.rounds)
             if bin_nonce:
                 log_sub.info('nonce found')
                 self.nonce_callback(bin_nonce, mixhash, self.mining_hash)
@@ -71,7 +71,7 @@ class PoWWorker(object):
             getattr(self, 'recv_' + cmd)(**kargs)
 
 
-def powworker_process(cpipe, a):
+def powworker_process(cpipe):
     "entry point in forked sub processes, setup env"
     gevent.get_hub().SYSTEM_ERROR = BaseException  # stop on any exception
     PoWWorker(cpipe).run()
@@ -92,7 +92,7 @@ class PoWService(BaseService):
         super(PoWService, self).__init__(app)
         self.cpipe, self.ppipe = gipc.pipe(duplex=True)
         self.worker_process = gipc.start_process(
-            target=powworker_process, args=(self.cpipe, 1))
+            target=powworker_process, args=(self.cpipe,))
         self.app.services.chain.on_new_head_candidate_cbs.append(self.on_new_head_candidate)
 
     @property

@@ -1,18 +1,18 @@
 import time
-from config import Env
+from ethereum.config import Env
 from ethereum.utils import sha3
 import rlp
 from rlp.utils import encode_hex
-import processblock
-import config as ethereum_config
+from ethereum import processblock
+import ethereum.config as ethereum_config
 from synchronizer import Synchronizer
 from ethereum.slogging import get_logger
-from processblock import validate_transaction
+from ethereum.processblock import validate_transaction
 from ethereum.exceptions import InvalidNonce, InsufficientBalance, InvalidTransaction
-from chain import Chain
+from ethereum.chain import Chain
 from ethereum.refcount_db import RefcountDB
-from blocks import Block, VerificationFailed
-from transactions import Transaction
+from ethereum.blocks import Block, VerificationFailed
+from ethereum.transactions import Transaction
 from devp2p.service import WiredService
 from devp2p.protocol import BaseProtocol
 import eth_protocol
