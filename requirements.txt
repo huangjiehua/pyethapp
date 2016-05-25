@@ -12,7 +12,6 @@ ipython>=3.0.0
 statistics
 requests
 rlp>=0.4.4
-devp2p>=0.7.1
 pbkdf2
 scrypt
 pexpect

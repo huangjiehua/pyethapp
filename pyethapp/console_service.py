@@ -5,7 +5,6 @@ from logging import StreamHandler, Formatter
 import os
 import signal
 import errno
-import processblock
 import select
 import time
 import sys
@@ -17,9 +16,9 @@ from gevent.event import Event
 import IPython
 import IPython.core.shellapp
 from IPython.lib.inputhook import inputhook_manager, stdin_ready
+from ethereum import processblock
 from ethereum.slogging import getLogger
-from ethereum import transactions 
-from transactions import Transaction
+from ethereum.transactions import Transaction
 from ethereum.utils import denoms, normalize_address as _normalize_address, bcolors as bc
 
 from rpc_client import ABIContract
